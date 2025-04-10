@@ -2,25 +2,39 @@ import openai
 import json
 import os
 import re
-from dotenv import load_dotenv
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import streamlit as st
 import logging
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from openai import OpenAIError, APIConnectionError, APIError, RateLimitError, BadRequestError
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
+# Get API key from Streamlit secrets or from environment variable (for local development)
+def get_api_key():
+    # First try to get from Streamlit secrets
+    if hasattr(st, 'secrets') and 'OPENAI_API_KEY' in st.secrets:
+        return st.secrets['OPENAI_API_KEY']
+    # Fall back to environment variable (for local development)
+    elif os.getenv("OPENAI_API_KEY"):
+        return os.getenv("OPENAI_API_KEY")
+    else:
+        raise ValueError("No OpenAI API key found in Streamlit secrets or environment variables")
 
 # Initialize OpenAI client
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-if not os.getenv("OPENAI_API_KEY"):
-    raise ValueError("OPENAI_API_KEY not found in environment variables")
+client = openai.OpenAI(api_key=get_api_key())
 
-# Default to GPT-3.5-turbo, but allow for configuration
-MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+# Get model from Streamlit secrets or use default
+def get_model():
+    if hasattr(st, 'secrets') and 'OPENAI_MODEL' in st.secrets:
+        return st.secrets['OPENAI_MODEL']
+    elif os.getenv("OPENAI_MODEL"):
+        return os.getenv("OPENAI_MODEL")
+    else:
+        return "gpt-3.5-turbo"  # Default model
+
+MODEL = get_model()
 
 def create_llm_prompt(lines):
     """Create a prompt that explicitly asks for structured JSON"""
