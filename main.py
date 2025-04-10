@@ -1,15 +1,27 @@
 import streamlit as st
 import services
 import time
-from streamlit.runtime.scriptrunner import RerunException
+import traceback
 
-def show_error(message):
+def display_error(message, details=None):
     st.error(message)
+    if details:
+        with st.expander("Error Details"):
+            st.code(details)
     st.stop()
 
 @st.cache_data(show_spinner=False)
 def analyze_data(file_content):
     return services.analyze_lessons(file_content)
+
+def safe_get(dictionary, keys, default=None):
+    """Safely get nested dictionary values"""
+    for key in keys:
+        if isinstance(dictionary, dict) and key in dictionary:
+            dictionary = dictionary[key]
+        else:
+            return default
+    return dictionary
 
 def main():
     st.set_page_config(page_title="Post-Mortem Analysis", layout="wide")
@@ -21,20 +33,27 @@ def main():
         try:
             file_content = uploaded_file.read().decode("utf-8").splitlines()
             if not file_content:
-                show_error("Uploaded file is empty")
+                display_error("Uploaded file is empty")
             
             with st.spinner("Analyzing post-mortem data (this may take a minute)..."):
-                start_time = time.time()
-                report = analyze_data(file_content)
-                st.success(f"Analysis completed in {time.time() - start_time:.1f} seconds")
+                try:
+                    start_time = time.time()
+                    report = analyze_data(file_content)
+                    st.success(f"Analysis completed in {time.time() - start_time:.1f} seconds")
+                except Exception as e:
+                    display_error("Analysis failed", traceback.format_exc())
             
             if "error" in report:
-                show_error(f"Analysis error: {report['error']}")
+                # Check if there's debug info available
+                if "debug_info" in report:
+                    display_error(f"Analysis error: {report['error']}", report['debug_info'])
+                else:
+                    display_error(f"Analysis error: {report['error']}")
             
             display_results(report)
             
         except Exception as e:
-            show_error(f"Unexpected error: {str(e)}")
+            display_error(f"Unexpected error: {str(e)}", traceback.format_exc())
 
 def display_results(report):
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -45,25 +64,30 @@ def display_results(report):
     ])
     
     with tab1:
-        if report["unrecoverable_lines"]:
-            st.write("Lines that couldn't be understood:")
+        st.subheader("Lines with Unrecoverable Meaning")
+        if safe_get(report, ["unrecoverable_lines"]):
             for line in report["unrecoverable_lines"]:
-                st.code(line, language="text")
+                st.write(f"- {line}")
         else:
-            st.info("All lines had recoverable meaning")
+            st.info("No unrecoverable lines found")
     
     with tab2:
-        if report["common_ideas"]:
+        st.subheader("Common Themes")
+        if safe_get(report, ["common_ideas"]):
             for category in report["common_ideas"]:
-                with st.expander(f"{category['title']} (Confidence: {category['overall_confidence']}%)"):
-                    for example in category["examples"]:
-                        st.write(f"- {example['text']} (Fit: {example['confidence']}%)")
+                with st.expander(f"{safe_get(category, ['title'], 'Untitled')} (Confidence: {safe_get(category, ['overall_confidence'], '?')}%)"):
+                    examples = safe_get(category, ['examples'], [])
+                    if examples:
+                        for example in examples:
+                            st.write(f"- {safe_get(example, ['text'], '')} (Fit: {safe_get(example, ['confidence'], '?')}%)")
+                    else:
+                        st.info("No examples for this category")
         else:
             st.info("No common themes identified")
     
     with tab3:
-        if report["uncategorized_lines"]:
-            st.write("Meaningful lines that didn't fit categories:")
+        st.subheader("Meaningful but Unclassified Lines")
+        if safe_get(report, ["uncategorized_lines"]):
             for line in report["uncategorized_lines"]:
                 st.write(f"- {line}")
         else:
@@ -71,15 +95,21 @@ def display_results(report):
     
     with tab4:
         st.subheader("Summary")
-        st.write(report["summary"])
+        st.write(safe_get(report, ["summary"], "No summary available"))
         
         st.subheader("Key Observations")
-        for obs in report["observations"]:
-            st.write(f"- {obs}")
+        if safe_get(report, ["observations"]):
+            for obs in report["observations"]:
+                st.write(f"- {obs}")
+        else:
+            st.info("No observations available")
         
         st.subheader("Recommendations")
-        for rec in report["recommendations"]:
-            st.write(f"- {rec}")
+        if safe_get(report, ["recommendations"]):
+            for rec in report["recommendations"]:
+                st.write(f"- {rec}")
+        else:
+            st.info("No recommendations available")
 
 if __name__ == "__main__":
     main()
