@@ -24,10 +24,10 @@ def safe_get(dictionary, keys, default=None):
     return dictionary
 
 def main():
-    st.set_page_config(page_title="Post-Mortem Analysis", layout="wide")
+    st.set_page_config(page_title="Paraphraser Dashboard", layout="wide")
     st.title("Post-Mortem Analysis Tool")
     
-    uploaded_file = st.file_uploader("Upload your post-mortem data file", type=["txt"])
+    uploaded_file = st.file_uploader("Upload your file", type=["txt"])
     
     if uploaded_file is not None:
         try:
@@ -35,7 +35,7 @@ def main():
             if not file_content:
                 display_error("Uploaded file is empty")
             
-            with st.spinner("Analyzing post-mortem data (this may take a minute)..."):
+            with st.spinner("Analyzing your file (this may take a minute)..."):
                 try:
                     start_time = time.time()
                     report = analyze_data(file_content)
